@@ -26,6 +26,7 @@ import EquipmentSelector from '../components/EquipmentSelector';
 import CoachSelector from '../components/CoachSelector';
 import PriceBreakdown from '../components/PriceBreakdown';
 import { useBookingStore } from '../store';
+import { useAuthStore } from '../authStore';
 import { 
   getSlotsForDate, 
   getAvailability, 
@@ -90,6 +91,9 @@ const BookingPage: React.FC = () => {
   const [bookingResult, setBookingResult] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   
+  // Get authenticated user for auto-fill
+  const { user, isAuthenticated } = useAuthStore();
+  
   const {
     selectedDate,
     selectedSlot,
@@ -133,6 +137,13 @@ const BookingPage: React.FC = () => {
         : null,
     enabled: !!selectedSlot && !!selectedCourt,
   });
+  
+  // Auto-fill email for logged-in users
+  useEffect(() => {
+    if (isAuthenticated && user?.email && !userEmail) {
+      setUserEmail(user.email);
+    }
+  }, [isAuthenticated, user, userEmail, setUserEmail]);
   
   // Update pricing when data changes
   useEffect(() => {
@@ -719,6 +730,9 @@ const BookingPage: React.FC = () => {
                     <label className="email-label">
                       <Mail size={18} />
                       Confirmation Email
+                      {isAuthenticated && user && (
+                        <span className="logged-in-badge">Logged in as {user.name}</span>
+                      )}
                     </label>
                     <input
                       type="email"
@@ -726,6 +740,7 @@ const BookingPage: React.FC = () => {
                       placeholder="Enter your email address"
                       value={userEmail}
                       onChange={(e) => setUserEmail(e.target.value)}
+                      readOnly={isAuthenticated && !!user}
                     />
                   </motion.div>
 
