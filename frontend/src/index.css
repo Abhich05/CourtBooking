@@ -7706,3 +7706,25 @@ body {
     font-size: 2rem;
   }
 }
+
+/* Footer Link Spans */
+.footer-link {
+  color: var(--gray-400);
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.footer-link:hover {
+  color: white;
+}
+
+/* Terms Link Spans */
+.terms-link {
+  color: var(--primary-400);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.terms-link:hover {
+  color: var(--primary-300);
+}

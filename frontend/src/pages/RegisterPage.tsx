@@ -395,7 +395,7 @@ const RegisterPage: React.FC = () => {
                     />
                     <span className="checkmark" />
                     <span className="checkbox-label">
-                      I agree to the <a href="#">Terms of Service</a> and <a href="#">Privacy Policy</a>
+                      I agree to the <span className="terms-link">Terms of Service</span> and <span className="terms-link">Privacy Policy</span>
                     </span>
                   </label>
 
