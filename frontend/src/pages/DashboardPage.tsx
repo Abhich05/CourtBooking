@@ -1,6 +1,7 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
+import { Link } from 'react-router-dom';
 import {
   TrendingUp,
   DollarSign,
@@ -24,6 +25,13 @@ import {
   Sparkles,
   Download,
   Filter,
+  Heart,
+  Star,
+  MapPin,
+  CreditCard,
+  CalendarCheck,
+  Gift,
+  Crown,
 } from 'lucide-react';
 import { getAnalyticsDashboard, getUserAnalytics, AnalyticsDashboard } from '../api';
 import { useAuthStore } from '../authStore';
@@ -50,18 +58,23 @@ const itemVariants = {
 
 const DashboardPage: React.FC = () => {
   const { user, isAuthenticated } = useAuthStore();
+  const isAdmin = user?.role === 'admin';
   
-  const { data: analytics, isLoading } = useQuery<AnalyticsDashboard>({
+  // Only fetch admin analytics if user is admin
+  const { data: analytics, isLoading: analyticsLoading } = useQuery<AnalyticsDashboard>({
     queryKey: ['analytics'],
     queryFn: getAnalyticsDashboard,
     refetchInterval: 60000,
+    enabled: isAdmin, // Only fetch for admins
   });
 
-  const { data: userAnalytics } = useQuery({
+  const { data: userAnalytics, isLoading: userLoading } = useQuery({
     queryKey: ['userAnalytics', user?.id],
     queryFn: () => getUserAnalytics(user!.id),
     enabled: !!user?.id,
   });
+
+  const isLoading = isAdmin ? analyticsLoading : userLoading;
 
   if (isLoading) {
     return (
@@ -78,7 +91,7 @@ const DashboardPage: React.FC = () => {
           >
             <Activity size={40} />
           </motion.div>
-          <p>Loading analytics dashboard...</p>
+          <p>Loading your dashboard...</p>
         </motion.div>
       </div>
     );
@@ -100,10 +113,10 @@ const DashboardPage: React.FC = () => {
 
   const getLoyaltyIcon = (level: string) => {
     switch (level) {
-      case 'Gold': return <Trophy className="loyalty-icon gold" size={24} />;
+      case 'Gold': return <Crown className="loyalty-icon gold" size={24} />;
       case 'Silver': return <Award className="loyalty-icon silver" size={24} />;
       case 'Bronze+': return <Target className="loyalty-icon bronze-plus" size={24} />;
-      default: return <Award className="loyalty-icon bronze" size={24} />;
+      default: return <Star className="loyalty-icon bronze" size={24} />;
     }
   };
 
@@ -117,14 +130,242 @@ const DashboardPage: React.FC = () => {
     }
   };
 
+  // =============================================
+  // USER DASHBOARD (Non-Admin)
+  // =============================================
+  if (!isAdmin) {
+    return (
+      <motion.div 
+        className="dashboard-page user-dashboard"
+        variants={containerVariants}
+        initial="hidden"
+        animate="visible"
+      >
+        {/* User Header */}
+        <motion.div className="dashboard-header" variants={itemVariants}>
+          <div className="header-content">
+            <div className="header-title-section">
+              <div className="header-icon user-icon">
+                <Heart size={28} />
+              </div>
+              <div>
+                <h1>Welcome back, {user?.name?.split(' ')[0]}!</h1>
+                <p>Your personal badminton journey at a glance</p>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Loyalty Card */}
+        {userAnalytics && (
+          <motion.div className="loyalty-banner user-loyalty" variants={itemVariants}>
+            <div className="loyalty-glass-bg" />
+            <div className="loyalty-content">
+              <div className="loyalty-info">
+                <div className="loyalty-badge">
+                  {getLoyaltyIcon(userAnalytics.loyalty.level)}
+                  <div className="loyalty-text">
+                    <span className="loyalty-level">{userAnalytics.loyalty.level} Member</span>
+                    <span className="loyalty-welcome">Member since {userAnalytics.user.member_since ? new Date(userAnalytics.user.member_since).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : 'Recently'}</span>
+                  </div>
+                </div>
+                <div className="loyalty-stats">
+                  <div className="loyalty-stat-item">
+                    <Sparkles size={18} className="stat-icon" />
+                    <div className="stat-content">
+                      <span className="stat-value">{userAnalytics.loyalty.points}</span>
+                      <span className="stat-label">Points</span>
+                    </div>
+                  </div>
+                  <div className="loyalty-stat-divider" />
+                  <div className="loyalty-stat-item">
+                    <Gift size={18} className="stat-icon" />
+                    <div className="stat-content">
+                      <span className="stat-value">{Math.max(0, userAnalytics.loyalty.next_level_at - userAnalytics.loyalty.points)}</span>
+                      <span className="stat-label">To Next Level</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="loyalty-progress-section">
+                <div className="progress-header">
+                  <span>Progress to {userAnalytics.loyalty.level === 'Gold' ? 'Platinum' : userAnalytics.loyalty.level === 'Silver' ? 'Gold' : userAnalytics.loyalty.level === 'Bronze+' ? 'Silver' : 'Bronze+'}</span>
+                  <span className="progress-points">{userAnalytics.loyalty.points} / {userAnalytics.loyalty.next_level_at} pts</span>
+                </div>
+                <div className="progress-bar">
+                  <motion.div 
+                    className="progress-fill"
+                    initial={{ width: 0 }}
+                    animate={{ 
+                      width: `${Math.min(100, (userAnalytics.loyalty.points / userAnalytics.loyalty.next_level_at) * 100)}%` 
+                    }}
+                    transition={{ duration: 1, ease: "easeOut", delay: 0.5 }}
+                  />
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {/* User Stats Grid */}
+        {userAnalytics && (
+          <div className="stats-grid user-stats">
+            <motion.div className="stat-card bookings" variants={itemVariants}>
+              <div className="stat-card-bg" />
+              <div className="stat-header">
+                <div className="stat-icon-wrapper bookings">
+                  <CalendarCheck size={24} />
+                </div>
+              </div>
+              <div className="stat-content">
+                <span className="stat-label">Total Bookings</span>
+                <span className="stat-value">{userAnalytics.stats.total_bookings}</span>
+                <span className="stat-sublabel">Courts reserved</span>
+              </div>
+            </motion.div>
+
+            <motion.div className="stat-card hours" variants={itemVariants}>
+              <div className="stat-card-bg" />
+              <div className="stat-header">
+                <div className="stat-icon-wrapper hours">
+                  <Timer size={24} />
+                </div>
+              </div>
+              <div className="stat-content">
+                <span className="stat-label">Hours Played</span>
+                <span className="stat-value">{userAnalytics.stats.total_hours_played}</span>
+                <span className="stat-sublabel">On the court</span>
+              </div>
+            </motion.div>
+
+            <motion.div className="stat-card spent" variants={itemVariants}>
+              <div className="stat-card-bg" />
+              <div className="stat-header">
+                <div className="stat-icon-wrapper spent">
+                  <CreditCard size={24} />
+                </div>
+              </div>
+              <div className="stat-content">
+                <span className="stat-label">Total Spent</span>
+                <span className="stat-value">{formatCurrency(userAnalytics.stats.total_spent)}</span>
+                <span className="stat-sublabel">Lifetime</span>
+              </div>
+            </motion.div>
+
+            <motion.div className="stat-card favorite" variants={itemVariants}>
+              <div className="stat-card-bg" />
+              <div className="stat-header">
+                <div className="stat-icon-wrapper favorite">
+                  <MapPin size={24} />
+                </div>
+              </div>
+              <div className="stat-content">
+                <span className="stat-label">Favorite Court</span>
+                <span className="stat-value">{userAnalytics.stats.favorite_court?.name || 'None yet'}</span>
+                <span className="stat-sublabel">{userAnalytics.stats.favorite_court ? `${userAnalytics.stats.favorite_court.visits} visits` : 'Book your first!'}</span>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {/* Quick Actions */}
+        <motion.div className="quick-actions-section" variants={itemVariants}>
+          <div className="section-header">
+            <div className="section-title">
+              <Zap size={22} />
+              <h2>Quick Actions</h2>
+            </div>
+          </div>
+          <div className="quick-actions-grid">
+            <Link to="/booking" className="quick-action-card">
+              <motion.div 
+                className="quick-action-content"
+                whileHover={{ scale: 1.02, y: -4 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                <div className="quick-action-icon booking">
+                  <Calendar size={28} />
+                </div>
+                <div className="quick-action-text">
+                  <h3>Book a Court</h3>
+                  <p>Reserve your next session</p>
+                </div>
+                <ChevronRight size={20} className="quick-action-arrow" />
+              </motion.div>
+            </Link>
+            
+            <Link to="/my-bookings" className="quick-action-card">
+              <motion.div 
+                className="quick-action-content"
+                whileHover={{ scale: 1.02, y: -4 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                <div className="quick-action-icon bookings">
+                  <CalendarCheck size={28} />
+                </div>
+                <div className="quick-action-text">
+                  <h3>My Bookings</h3>
+                  <p>View upcoming sessions</p>
+                </div>
+                <ChevronRight size={20} className="quick-action-arrow" />
+              </motion.div>
+            </Link>
+          </div>
+        </motion.div>
+
+        {/* Loyalty Benefits */}
+        <motion.div className="benefits-section" variants={itemVariants}>
+          <div className="section-header">
+            <div className="section-title">
+              <Gift size={22} />
+              <h2>Your Benefits</h2>
+            </div>
+          </div>
+          <div className="benefits-grid">
+            <div className="benefit-card">
+              <div className="benefit-icon">
+                <Trophy size={24} />
+              </div>
+              <div className="benefit-content">
+                <h4>Loyalty Points</h4>
+                <p>Earn points with every booking</p>
+              </div>
+            </div>
+            <div className="benefit-card">
+              <div className="benefit-icon">
+                <Star size={24} />
+              </div>
+              <div className="benefit-content">
+                <h4>Priority Booking</h4>
+                <p>{userAnalytics?.loyalty.level === 'Gold' ? 'Unlocked!' : `Unlock at Gold level`}</p>
+              </div>
+            </div>
+            <div className="benefit-card">
+              <div className="benefit-icon">
+                <Zap size={24} />
+              </div>
+              <div className="benefit-content">
+                <h4>Special Discounts</h4>
+                <p>{userAnalytics?.loyalty.level === 'Silver' || userAnalytics?.loyalty.level === 'Gold' ? '10% off equipment' : 'Unlock at Silver level'}</p>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      </motion.div>
+    );
+  }
+
+  // =============================================
+  // ADMIN DASHBOARD
+  // =============================================
   return (
     <motion.div 
-      className="dashboard-page"
+      className="dashboard-page admin-dashboard"
       variants={containerVariants}
       initial="hidden"
       animate="visible"
     >
-      {/* Header */}
+      {/* Admin Header */}
       <motion.div className="dashboard-header" variants={itemVariants}>
         <div className="header-content">
           <div className="header-title-section">
@@ -132,8 +373,8 @@ const DashboardPage: React.FC = () => {
               <BarChart3 size={28} />
             </div>
             <div>
-              <h1>Analytics Dashboard</h1>
-              <p>Real-time insights and performance metrics</p>
+              <h1>Admin Dashboard</h1>
+              <p>Business analytics and performance metrics</p>
             </div>
           </div>
         </div>
@@ -157,66 +398,15 @@ const DashboardPage: React.FC = () => {
         </div>
       </motion.div>
 
-      {/* User Loyalty Card */}
-      {isAuthenticated && userAnalytics && (
-        <motion.div className="loyalty-banner" variants={itemVariants}>
-          <div className="loyalty-glass-bg" />
-          <div className="loyalty-content">
-            <div className="loyalty-info">
-              <div className="loyalty-badge">
-                {getLoyaltyIcon(userAnalytics.loyalty.level)}
-                <div className="loyalty-text">
-                  <span className="loyalty-level">{userAnalytics.loyalty.level} Member</span>
-                  <span className="loyalty-welcome">Welcome back, {user?.name}!</span>
-                </div>
-              </div>
-              <div className="loyalty-stats">
-                <div className="loyalty-stat-item">
-                  <Sparkles size={18} className="stat-icon" />
-                  <div className="stat-content">
-                    <span className="stat-value">{userAnalytics.loyalty.points}</span>
-                    <span className="stat-label">Points</span>
-                  </div>
-                </div>
-                <div className="loyalty-stat-divider" />
-                <div className="loyalty-stat-item">
-                  <Calendar size={18} className="stat-icon" />
-                  <div className="stat-content">
-                    <span className="stat-value">{userAnalytics.stats.total_bookings}</span>
-                    <span className="stat-label">Bookings</span>
-                  </div>
-                </div>
-                <div className="loyalty-stat-divider" />
-                <div className="loyalty-stat-item">
-                  <Timer size={18} className="stat-icon" />
-                  <div className="stat-content">
-                    <span className="stat-value">{userAnalytics.stats.total_hours_played}h</span>
-                    <span className="stat-label">Played</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="loyalty-progress-section">
-              <div className="progress-header">
-                <span>Progress to {userAnalytics.loyalty.level === 'Gold' ? 'Platinum' : 'Next Level'}</span>
-                <span className="progress-points">{userAnalytics.loyalty.points} / {userAnalytics.loyalty.next_level_at} pts</span>
-              </div>
-              <div className="progress-bar">
-                <motion.div 
-                  className="progress-fill"
-                  initial={{ width: 0 }}
-                  animate={{ 
-                    width: `${Math.min(100, (userAnalytics.loyalty.points / userAnalytics.loyalty.next_level_at) * 100)}%` 
-                  }}
-                  transition={{ duration: 1, ease: "easeOut", delay: 0.5 }}
-                />
-              </div>
-            </div>
-          </div>
-        </motion.div>
-      )}
+      {/* Admin Badge */}
+      <motion.div className="admin-badge-banner" variants={itemVariants}>
+        <div className="admin-badge-content">
+          <Crown size={20} />
+          <span>Administrator Access</span>
+        </div>
+      </motion.div>
 
-      {/* Summary Cards */}
+      {/* Summary Cards - Admin Only */}
       <div className="stats-grid">
         <motion.div className="stat-card revenue" variants={itemVariants}>
           <div className="stat-card-bg" />
