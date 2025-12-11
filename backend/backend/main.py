@@ -25,18 +25,23 @@ app = FastAPI(
 )
 
 # CORS Middleware - support production URLs
-cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000,https://court-booking-eta.vercel.app")
-allowed_origins = [origin.strip() for origin in cors_origins.split(",")]
+cors_origins = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "https://court-booking-eta.vercel.app",
+    "https://courtbooking-awhu.onrender.com",
+]
 
-# Add wildcard support for development
-if "*" in allowed_origins:
-    allowed_origins = ["*"]
+# Add any additional origins from environment variable
+extra_origins = os.getenv("CORS_ORIGINS", "")
+if extra_origins:
+    cors_origins.extend([o.strip() for o in extra_origins.split(",") if o.strip()])
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allowed_origins,
+    allow_origins=cors_origins,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
     expose_headers=["*"],
 )
