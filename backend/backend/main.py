@@ -14,6 +14,7 @@ import datetime
 import hashlib
 import json
 import asyncio
+import os
 from pydantic import BaseModel, EmailStr
 from typing import Optional, List, Set
 
@@ -23,10 +24,13 @@ app = FastAPI(
     version='2.0.0'
 )
 
-# CORS Middleware
+# CORS Middleware - support production URLs
+cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000")
+allowed_origins = [origin.strip() for origin in cors_origins.split(",")]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -34,6 +38,126 @@ app.add_middleware(
 
 def get_db_session():
     yield from db.get_db()
+
+
+# ===== Auto-seed database on startup =====
+@app.on_event("startup")
+async def startup_event():
+    """Initialize database and seed data on startup."""
+    from .models import Base, Court, User
+    
+    # Create tables
+    Base.metadata.create_all(bind=db.engine)
+    
+    # Check if data already exists
+    session = db.SessionLocal()
+    try:
+        existing_courts = session.query(Court).first()
+        if not existing_courts:
+            print("🌱 Seeding database...")
+            seed_database(session)
+            print("✅ Database seeded successfully!")
+        else:
+            print("✅ Database already seeded")
+    finally:
+        session.close()
+
+
+def seed_database(db_session):
+    """Seed the database with initial data."""
+    from .models import Court, EquipmentItem, Coach, PricingRule, CoachAvailability, User
+    from .auth import hash_password
+    
+    # Create admin user
+    admin = User(
+        name='Admin User',
+        email='admin@courtbook.com',
+        phone='+1234567890',
+        password_hash=hash_password('Admin123!'),
+        role='admin',
+        is_active=True,
+        email_verified=True
+    )
+    db_session.add(admin)
+    
+    # Create demo customer user
+    demo = User(
+        name='Demo User',
+        email='demo@courtbook.com',
+        phone='+1987654321',
+        password_hash=hash_password('Demo123!'),
+        role='customer',
+        is_active=True,
+        email_verified=True
+    )
+    db_session.add(demo)
+
+    # Courts
+    courts_data = [
+        {'name': 'Court 1 (Indoor)', 'type': 'indoor', 'base_hourly': 600},
+        {'name': 'Court 2 (Indoor)', 'type': 'indoor', 'base_hourly': 600},
+        {'name': 'Court 3 (Outdoor)', 'type': 'outdoor', 'base_hourly': 400},
+        {'name': 'Court 4 (Outdoor)', 'type': 'outdoor', 'base_hourly': 400},
+    ]
+    for c in courts_data:
+        db_session.add(Court(name=c['name'], type=c['type'], base_hourly=c['base_hourly']))
+
+    # Equipment
+    equipment_data = [
+        {'sku': 'racket', 'name': 'Badminton Racket', 'total_quantity': 10},
+        {'sku': 'shoes', 'name': 'Court Shoes', 'total_quantity': 8},
+        {'sku': 'shuttlecock', 'name': 'Shuttlecock (Pack of 6)', 'total_quantity': 20}
+    ]
+    for e in equipment_data:
+        db_session.add(EquipmentItem(sku=e['sku'], name=e['name'], total_quantity=e['total_quantity']))
+
+    # Coaches
+    coaches_data = [
+        {'name': 'Coach Alex', 'hourly_rate': 300},
+        {'name': 'Coach Sarah', 'hourly_rate': 250},
+        {'name': 'Coach Mike', 'hourly_rate': 200}
+    ]
+    coaches = []
+    for c in coaches_data:
+        coach = Coach(name=c['name'], hourly_rate=c['hourly_rate'])
+        db_session.add(coach)
+        coaches.append(coach)
+    
+    db_session.flush()  # Get coach IDs
+    
+    # Coach availability (Mon-Sat, 8am-8pm)
+    days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
+    for coach in coaches:
+        for day in days:
+            db_session.add(CoachAvailability(
+                coach_id=coach.id,
+                day_of_week=day,
+                start_time='08:00',
+                end_time='20:00'
+            ))
+
+    # Pricing rules
+    rules_data = [
+        {
+            'name': 'Peak Hours (6-9 PM)', 'enabled': True, 'priority': 10,
+            'rule_json': {'match': {'start': '18:00', 'end': '21:00', 'days': ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']}, 'modifier': {'type': 'percentage', 'value': 20}},
+            'applies_to': 'court'
+        },
+        {
+            'name': 'Weekend Surcharge', 'enabled': True, 'priority': 5,
+            'rule_json': {'match': {'days': ['sat', 'sun']}, 'modifier': {'type': 'percentage', 'value': 15}},
+            'applies_to': 'court'
+        },
+        {
+            'name': 'Indoor Premium', 'enabled': True, 'priority': 8,
+            'rule_json': {'match': {}, 'applies_to': 'indoor', 'modifier': {'type': 'percentage', 'value': 25}},
+            'applies_to': 'court'
+        }
+    ]
+    for r in rules_data:
+        db_session.add(PricingRule(name=r['name'], enabled=r['enabled'], priority=r['priority'], rule_json=r['rule_json'], applies_to=r['applies_to']))
+
+    db_session.commit()
 
 
 # ===== WebSocket Connection Manager =====
