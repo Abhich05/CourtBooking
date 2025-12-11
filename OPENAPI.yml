@@ -1,0 +1,343 @@
+openapi: 3.0.0
+info:
+  title: Court Booking Platform API
+  version: 1.0.0
+  description: Production-ready atomic multi-resource booking with dynamic pricing
+
+servers:
+  - url: http://localhost:8000
+    description: Local development
+
+paths:
+  /api/admin/seed:
+    post:
+      tags:
+        - Admin
+      summary: Seed database with dev data
+      operationId: seedDatabase
+      responses:
+        '200':
+          description: Seeding complete
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: seeded
+
+  /api/slots/{date_str}:
+    get:
+      tags:
+        - Availability
+      summary: Get available slots for a date
+      operationId: getSlotsForDate
+      parameters:
+        - name: date_str
+          in: path
+          required: true
+          schema:
+            type: string
+            example: '2025-12-20'
+      responses:
+        '200':
+          description: Slots for date
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  date:
+                    type: string
+                  courts:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        name:
+                          type: string
+                        type:
+                          type: string
+                          enum: [indoor, outdoor]
+                  slots:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        start:
+                          type: string
+                          format: date-time
+                        end:
+                          type: string
+                          format: date-time
+                  coaches:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        name:
+                          type: string
+                        hourly_rate:
+                          type: integer
+
+  /api/availability:
+    get:
+      tags:
+        - Availability
+      summary: Check resource availability for time window
+      operationId: getAvailability
+      parameters:
+        - name: start_ts
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+        - name: end_ts
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+        - name: court_type
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [indoor, outdoor]
+      responses:
+        '200':
+          description: Availability status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  available_courts:
+                    type: array
+                  equipment:
+                    type: array
+                  coaches:
+                    type: array
+
+  /api/simulate-pricing:
+    get:
+      tags:
+        - Pricing
+      summary: Preview price for booking
+      operationId: simulatePricing
+      parameters:
+        - name: start_ts
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+        - name: end_ts
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+        - name: court_id
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Price breakdown
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  base:
+                    type: number
+                  rule_breakdown:
+                    type: array
+                  line_items:
+                    type: array
+                  total:
+                    type: number
+
+  /api/bookings:
+    post:
+      tags:
+        - Bookings
+      summary: Create a booking (atomic)
+      operationId: createBooking
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - user_email
+                - start_ts
+                - end_ts
+                - court_id
+              properties:
+                user_email:
+                  type: string
+                start_ts:
+                  type: string
+                  format: date-time
+                end_ts:
+                  type: string
+                  format: date-time
+                court_id:
+                  type: integer
+                equipment:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      sku:
+                        type: string
+                      quantity:
+                        type: integer
+                coach_id:
+                  type: integer
+                idempotency_key:
+                  type: string
+      responses:
+        '200':
+          description: Booking result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [confirmed, waitlisted]
+                  booking_id:
+                    type: integer
+                  total:
+                    type: number
+                  pricing:
+                    type: object
+
+  /api/bookings/{booking_id}:
+    get:
+      tags:
+        - Bookings
+      summary: Get booking details
+      operationId: getBooking
+      parameters:
+        - name: booking_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Booking details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  user_id:
+                    type: integer
+                  start_ts:
+                    type: string
+                    format: date-time
+                  end_ts:
+                    type: string
+                    format: date-time
+                  status:
+                    type: string
+                  total_price:
+                    type: number
+                  created_at:
+                    type: string
+                    format: date-time
+
+  /api/bookings/{booking_id}/cancel:
+    post:
+      tags:
+        - Bookings
+      summary: Cancel a booking
+      operationId: cancelBooking
+      parameters:
+        - name: booking_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Cancellation result
+
+  /api/admin/pricing-rules:
+    get:
+      tags:
+        - Admin
+      summary: List all pricing rules
+      operationId: listPricingRules
+      responses:
+        '200':
+          description: Pricing rules
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+    post:
+      tags:
+        - Admin
+      summary: Create pricing rule
+      operationId: createPricingRule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                enabled:
+                  type: boolean
+                priority:
+                  type: integer
+                rule_json:
+                  type: object
+                applies_to:
+                  type: string
+      responses:
+        '200':
+          description: Rule created
+
+  /api/admin/pricing-rules/{rule_id}:
+    put:
+      tags:
+        - Admin
+      summary: Update pricing rule
+      operationId: updatePricingRule
+      parameters:
+        - name: rule_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Rule updated
